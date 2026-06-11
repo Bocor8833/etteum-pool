@@ -48,9 +48,9 @@ interface CodeBuddyTokens {
 /** Map cb- prefixed model IDs to the actual CodeBuddy API model names. */
 const CB_MODEL_MAP: Record<string, string> = {
   // Claude
+  // "cb-opus-4.8": "claude-opus-4.8",   // not available on CodeBuddy yet
+  // "cb-opus-4.7": "claude-opus-4.7",   // not available on CodeBuddy yet
   "cb-opus-4.6": "claude-opus-4.6",
-  "cb-opus-4.7": "claude-opus-4.7",
-  "cb-opus-4.8": "claude-opus-4.8",
   "cb-sonnet-4.6": "claude-sonnet-4.6",
   "cb-haiku-4.5": "claude-haiku-4.5",
   // GPT
@@ -113,8 +113,8 @@ export class CodeBuddyProvider extends BaseProvider {
     // 1 CodeBuddy credit ≈ $0.01 passthrough.
 
     // All models exposed with cb- prefix only
-    { id: "cb-opus-4.8", object: "model", created: Date.now(), owned_by: "codebuddy", context_window: 1000000, max_output: 64000, thinking: true, vision: true, creditUnit: "token", creditRate: 0.027 / 1000, creditSource: "estimated" },
-    { id: "cb-opus-4.7", object: "model", created: Date.now(), owned_by: "codebuddy", context_window: 1000000, max_output: 64000, thinking: true, vision: true, creditUnit: "token", creditRate: 0.027 / 1000, creditSource: "estimated" },
+    // { id: "cb-opus-4.8", ... } — not available on CodeBuddy yet
+    // { id: "cb-opus-4.7", ... } — not available on CodeBuddy yet
     { id: "cb-opus-4.6", object: "model", created: Date.now(), owned_by: "codebuddy", context_window: 1000000, max_output: 64000, thinking: true, vision: true, creditUnit: "token", creditRate: 0.027 / 1000, creditSource: "estimated" },
     { id: "cb-sonnet-4.6", object: "model", created: Date.now(), owned_by: "codebuddy", context_window: 200000, max_output: 64000, thinking: true, vision: true, creditUnit: "token", creditRate: 0.015 / 1000, creditSource: "estimated" },
     { id: "cb-haiku-4.5", object: "model", created: Date.now(), owned_by: "codebuddy", context_window: 200000, max_output: 8192, thinking: true, vision: true, creditUnit: "token", creditRate: 0.005 / 1000, creditSource: "estimated" },
@@ -133,7 +133,7 @@ export class CodeBuddyProvider extends BaseProvider {
     { id: "cb-gemini-3.1-flash-lite", object: "model", created: Date.now(), owned_by: "codebuddy", thinking: false, vision: true, creditUnit: "token", creditRate: 0.002 / 1000, creditSource: "estimated" },
     { id: "cb-gemini-3.1-pro", object: "model", created: Date.now(), owned_by: "codebuddy", thinking: false, vision: true, creditUnit: "token", creditRate: 0.015 / 1000, creditSource: "estimated" },
     { id: "cb-gemini-3.5-flash", object: "model", created: Date.now(), owned_by: "codebuddy", thinking: true, vision: true, creditUnit: "token", creditRate: 0.004 / 1000, creditSource: "estimated" },
-    { id: "cb-deepseek-v3-2", object: "model", created: Date.now(), owned_by: "codebuddy", thinking: false, vision: false, creditUnit: "token", creditRate: 0.002 / 1000, creditSource: "estimated" },
+    // { id: "cb-deepseek-v3-2", ... } — not available on CodeBuddy yet
     { id: "cb-kimi-k2.5", object: "model", created: Date.now(), owned_by: "codebuddy", thinking: false, vision: false, creditUnit: "token", creditRate: 0.005 / 1000, creditSource: "estimated" },
     { id: "cb-enowx", object: "model", created: Date.now(), owned_by: "codebuddy", thinking: false, vision: true, creditUnit: "token", creditRate: 0.01 / 1000, creditSource: "estimated" },
   ];
@@ -726,6 +726,15 @@ export class CodeBuddyProvider extends BaseProvider {
       cleanedMessages.push(msg);
     }
 
+    // CodeBuddy requires a system message — inject one if missing
+    const hasSystem = cleanedMessages.some((m) => m.role === "system");
+    if (!hasSystem) {
+      cleanedMessages.unshift({
+        role: "system",
+        content: "You are a helpful AI assistant.",
+      });
+    }
+
     const body: Record<string, unknown> = {
       messages: cleanedMessages,
       model: actualModel,
@@ -733,8 +742,9 @@ export class CodeBuddyProvider extends BaseProvider {
     };
 
     // Only add max_tokens if explicitly provided and reasonable
+    // CodeBuddy rejects max_tokens < ~50 for GPT models
     if (request.max_tokens && request.max_tokens > 0) {
-      body.max_tokens = Math.min(request.max_tokens, 32000);
+      body.max_tokens = Math.max(50, Math.min(request.max_tokens, 32000));
     }
 
     // Normalize and forward tools if provided
